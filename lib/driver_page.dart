@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:test_01/home_screen.dart';
+import 'package:location/location.dart';
 
 class DriverPage extends StatefulWidget {
   @override
@@ -8,29 +8,72 @@ class DriverPage extends StatefulWidget {
 }
 
 class _DriverPageState extends State<DriverPage> {
+  Location _location = Location();
+  GoogleMapController? _mapController;
   Set<Marker> _markers = {};
-  String selectedRoute = "Men's Hostel"; // Default value
-  bool isShiftActive = false;
+  LatLng _currentPosition = LatLng(12.972060, 79.156578); // Default location
 
-  // Function to navigate to the selected page
-  void navigateToPage(String route) {
-    if (route == "Men's Hostel") {
-      //Route to mens hostel shuttle logic
-    } else {
-      //route to academic blocks shuttle logic
-    }
+  @override
+  void initState() {
+    super.initState();
+    _getDriverLocation();
   }
 
-  void _onMapCreated(GoogleMapController controller) {
+  Future<void> _getDriverLocation() async {
+    bool serviceEnabled;
+    PermissionStatus permissionGranted;
+
+    // Check if location services are enabled
+    serviceEnabled = await _location.serviceEnabled();
+    if (!serviceEnabled) {
+      serviceEnabled = await _location.requestService();
+      if (!serviceEnabled) return;
+    }
+
+    // Check location permission
+    permissionGranted = await _location.hasPermission();
+    if (permissionGranted == PermissionStatus.denied) {
+      permissionGranted = await _location.requestPermission();
+      if (permissionGranted != PermissionStatus.granted) return;
+    }
+
+    // Get the driver's current location
+    LocationData locationData = await _location.getLocation();
+
     setState(() {
+      _currentPosition =
+          LatLng(locationData.latitude ?? 0.0, locationData.longitude ?? 0.0);
       _markers.add(
         Marker(
-          markerId: MarkerId('driver1'),
-          position: LatLng(12.972060, 79.156578), // Driver's current position
-          infoWindow: InfoWindow(title: 'Driver Location'),
+          markerId: MarkerId('driverLocation'),
+          position: _currentPosition,
+          infoWindow: InfoWindow(title: 'Driver\'s Location'),
         ),
       );
     });
+
+    // Listen to location changes
+    _location.onLocationChanged.listen((newLocation) {
+      setState(() {
+        _currentPosition =
+            LatLng(newLocation.latitude ?? 0.0, newLocation.longitude ?? 0.0);
+        _markers.clear();
+        _markers.add(
+          Marker(
+            markerId: MarkerId('driverLocation'),
+            position: _currentPosition,
+            infoWindow: InfoWindow(title: 'Driver\'s Location'),
+          ),
+        );
+        _mapController?.animateCamera(
+          CameraUpdate.newLatLng(_currentPosition),
+        );
+      });
+    });
+  }
+
+  void _onMapCreated(GoogleMapController controller) {
+    _mapController = controller;
   }
 
   @override
@@ -39,83 +82,15 @@ class _DriverPageState extends State<DriverPage> {
       appBar: AppBar(
         title: Text('Driver Page'),
       ),
-      drawer: Drawer(
-        child: Column(
-          children: [
-            ListTile(
-              title: Text('Home'),
-              onTap: () {
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              title: Text('Other Option 1'),
-              onTap: () {
-                Navigator.pop(context);
-              },
-            ),
-            DropdownButton<String>(
-              value: selectedRoute,
-              items: <String>["Men's Hostel", 'Academic Block']
-                  .map<DropdownMenuItem<String>>((String value) {
-                return DropdownMenuItem<String>(
-                  value: value,
-                  child: Text(value),
-                );
-              }).toList(),
-              onChanged: (String? newValue) {
-                setState(() {
-                  selectedRoute = newValue!;
-                  print(selectedRoute);
-                });
-              },
-            ),
-            ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  isShiftActive = !isShiftActive; // Toggle the shift state
-                });
-                print(isShiftActive ? "Shift Started" : "Shift Ended");
-              },
-              child: Text(isShiftActive ? 'End Shift' : 'Start Shift'),
-            ),
-            Spacer(),
-            ListTile(
-              title: Text('Logout'),
-              onTap: () {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (context) => HomeScreen()),
-                );
-              },
-            ),
-          ],
+      body: GoogleMap(
+        initialCameraPosition: CameraPosition(
+          target: _currentPosition,
+          zoom: 18.0,
         ),
-      ),
-      body: Column(
-        children: [
-          SizedBox(
-            height: 650,
-            child: GoogleMap(
-              initialCameraPosition: CameraPosition(
-                target: LatLng(12.972060, 79.156578),
-                zoom: 18,
-              ),
-              markers: _markers,
-              onMapCreated: _onMapCreated,
-            ),
-          ),
-          SizedBox(height: 20),
-          Text(
-            'Bus Location: Men\'s Hostel to Academic Block',
-            style: TextStyle(fontSize: 18),
-          ),
-          SizedBox(height: 10),
-          Text(
-            'Estimated Time of Arrival: 15 minutes',
-            style: TextStyle(fontSize: 18),
-          ),
-        ],
+        onMapCreated: _onMapCreated,
+        markers: _markers,
+        myLocationEnabled: true,
+        myLocationButtonEnabled: true,
       ),
     );
   }

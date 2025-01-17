@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'home_screen.dart';
+import 'package:location/location.dart';
 
 class StudentPage extends StatefulWidget {
   @override
@@ -8,23 +8,72 @@ class StudentPage extends StatefulWidget {
 }
 
 class _StudentPageState extends State<StudentPage> {
-  // Set up the camera position for the map
-  final CameraPosition _cameraPosition =
-      CameraPosition(target: LatLng(12.972060, 79.156578), zoom: 18.0);
-
+  Location _location = Location();
+  GoogleMapController? _mapController;
   Set<Marker> _markers = {};
+  LatLng _currentPosition = LatLng(12.972060, 79.156578); // Default location
 
-  // Method to create the marker for the student's bus location
-  void _onMapCreated(GoogleMapController controller) {
+  @override
+  void initState() {
+    super.initState();
+    _getUserLocation();
+  }
+
+  Future<void> _getUserLocation() async {
+    bool serviceEnabled;
+    PermissionStatus permissionGranted;
+
+    // Check if location services are enabled
+    serviceEnabled = await _location.serviceEnabled();
+    if (!serviceEnabled) {
+      serviceEnabled = await _location.requestService();
+      if (!serviceEnabled) return;
+    }
+
+    // Check location permission
+    permissionGranted = await _location.hasPermission();
+    if (permissionGranted == PermissionStatus.denied) {
+      permissionGranted = await _location.requestPermission();
+      if (permissionGranted != PermissionStatus.granted) return;
+    }
+
+    // Get the user's current location
+    LocationData locationData = await _location.getLocation();
+
     setState(() {
+      _currentPosition =
+          LatLng(locationData.latitude ?? 0.0, locationData.longitude ?? 0.0);
       _markers.add(
         Marker(
-          markerId: MarkerId('busLocation'),
-          position: LatLng(12.972060, 79.156578), // Bus's current location
-          infoWindow: InfoWindow(title: 'Your Bus Location'),
+          markerId: MarkerId('userLocation'),
+          position: _currentPosition,
+          infoWindow: InfoWindow(title: 'Your Location'),
         ),
       );
     });
+
+    // Listen to location changes
+    _location.onLocationChanged.listen((newLocation) {
+      setState(() {
+        _currentPosition =
+            LatLng(newLocation.latitude ?? 0.0, newLocation.longitude ?? 0.0);
+        _markers.clear();
+        _markers.add(
+          Marker(
+            markerId: MarkerId('userLocation'),
+            position: _currentPosition,
+            infoWindow: InfoWindow(title: 'Your Location'),
+          ),
+        );
+        _mapController?.animateCamera(
+          CameraUpdate.newLatLng(_currentPosition),
+        );
+      });
+    });
+  }
+
+  void _onMapCreated(GoogleMapController controller) {
+    _mapController = controller;
   }
 
   @override
@@ -33,67 +82,15 @@ class _StudentPageState extends State<StudentPage> {
       appBar: AppBar(
         title: Text('Student Page'),
       ),
-      drawer: Drawer(
-        child: Column(
-          children: [
-            ListTile(
-              title: Text('Home'),
-              onTap: () {
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              title: Text('Other Option 1'),
-              onTap: () {
-                Navigator.pop(context);
-              },
-            ),
-            Spacer(),
-            ListTile(
-              title: Text('Logout'),
-              onTap: () {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (context) => HomeScreen()),
-                );
-              },
-            ),
-          ],
+      body: GoogleMap(
+        initialCameraPosition: CameraPosition(
+          target: _currentPosition,
+          zoom: 18.0,
         ),
-      ),
-      body: Column(
-        children: [
-          SizedBox(
-            height: 600,
-            child: GoogleMap(
-              initialCameraPosition: _cameraPosition,
-              markers: _markers,
-              onMapCreated: _onMapCreated,
-            ),
-          ),
-          SizedBox(height: 20),
-          Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  'Your Bus is Approaching!',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                ),
-                SizedBox(height: 20),
-                Text(
-                  'Bus Number: XYZ123',
-                  style: TextStyle(fontSize: 18),
-                ),
-                SizedBox(height: 20),
-                Text(
-                  'Estimated Arrival: 5 mins',
-                  style: TextStyle(fontSize: 18),
-                ),
-              ],
-            ),
-          ),
-        ],
+        onMapCreated: _onMapCreated,
+        markers: _markers,
+        myLocationEnabled: true,
+        myLocationButtonEnabled: true,
       ),
     );
   }
