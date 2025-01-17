@@ -12,14 +12,16 @@ class _DriverPageState extends State<DriverPage> {
   GoogleMapController? _mapController;
   Set<Marker> _markers = {};
   LatLng _currentPosition = LatLng(12.972060, 79.156578); // Default location
+  String _locationData = 'Location not available';
 
   @override
   void initState() {
     super.initState();
-    _getDriverLocation();
+    _getLiveLocation();
   }
 
-  Future<void> _getDriverLocation() async {
+  // Function to get and print the live location
+  Future<void> _getLiveLocation() async {
     bool serviceEnabled;
     PermissionStatus permissionGranted;
 
@@ -27,47 +29,41 @@ class _DriverPageState extends State<DriverPage> {
     serviceEnabled = await _location.serviceEnabled();
     if (!serviceEnabled) {
       serviceEnabled = await _location.requestService();
-      if (!serviceEnabled) return;
+      if (!serviceEnabled) {
+        print('Location services are not enabled.');
+        return;
+      }
     }
 
-    // Check location permission
+    // Check location permissions
     permissionGranted = await _location.hasPermission();
     if (permissionGranted == PermissionStatus.denied) {
       permissionGranted = await _location.requestPermission();
-      if (permissionGranted != PermissionStatus.granted) return;
+      if (permissionGranted != PermissionStatus.granted) {
+        print('Location permission denied');
+        return;
+      }
     }
 
-    // Get the driver's current location
+    // Get the current location
     LocationData locationData = await _location.getLocation();
 
+    // Update the UI with location data
     setState(() {
       _currentPosition =
           LatLng(locationData.latitude ?? 0.0, locationData.longitude ?? 0.0);
-      _markers.add(
-        Marker(
-          markerId: MarkerId('driverLocation'),
-          position: _currentPosition,
-          infoWindow: InfoWindow(title: 'Driver\'s Location'),
-        ),
-      );
+      _locationData =
+          'Latitude: ${locationData.latitude}, Longitude: ${locationData.longitude}';
     });
 
     // Listen to location changes
     _location.onLocationChanged.listen((newLocation) {
+      // Update the UI with new location
       setState(() {
         _currentPosition =
             LatLng(newLocation.latitude ?? 0.0, newLocation.longitude ?? 0.0);
-        _markers.clear();
-        _markers.add(
-          Marker(
-            markerId: MarkerId('driverLocation'),
-            position: _currentPosition,
-            infoWindow: InfoWindow(title: 'Driver\'s Location'),
-          ),
-        );
-        _mapController?.animateCamera(
-          CameraUpdate.newLatLng(_currentPosition),
-        );
+        _locationData =
+            'Latitude: ${newLocation.latitude}, Longitude: ${newLocation.longitude}';
       });
     });
   }
@@ -82,15 +78,32 @@ class _DriverPageState extends State<DriverPage> {
       appBar: AppBar(
         title: Text('Driver Page'),
       ),
-      body: GoogleMap(
-        initialCameraPosition: CameraPosition(
-          target: _currentPosition,
-          zoom: 18.0,
-        ),
-        onMapCreated: _onMapCreated,
-        markers: _markers,
-        myLocationEnabled: true,
-        myLocationButtonEnabled: true,
+      body: Column(
+        children: [
+          // Google Map at the top
+          SizedBox(
+            height: 600, // You can adjust this height to your preference
+            child: GoogleMap(
+              initialCameraPosition: CameraPosition(
+                target: _currentPosition,
+                zoom: 18.0,
+              ),
+              onMapCreated: _onMapCreated,
+              markers: _markers,
+              myLocationEnabled: true,
+              myLocationButtonEnabled: true,
+            ),
+          ),
+          SizedBox(height: 20), // Space between the map and the location text
+          // Location information below the map
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Text(
+              _locationData,
+              style: TextStyle(fontSize: 18),
+            ),
+          ),
+        ],
       ),
     );
   }
