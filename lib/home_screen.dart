@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'student_page.dart';
 import 'driver_page.dart';
+import 'driver_login.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -15,7 +16,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (role == 'Driver') {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => DriverPage()),
+        MaterialPageRoute(builder: (context) => DriverLogin()),
       );
     } else {
       Navigator.pushReplacement(

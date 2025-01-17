@@ -9,6 +9,17 @@ class DriverPage extends StatefulWidget {
 
 class _DriverPageState extends State<DriverPage> {
   Set<Marker> _markers = {};
+  String selectedRoute = "Men's Hostel"; // Default value
+  bool isShiftActive = false;
+
+  // Function to navigate to the selected page
+  void navigateToPage(String route) {
+    if (route == "Men's Hostel") {
+      //Route to mens hostel shuttle logic
+    } else {
+      //route to academic blocks shuttle logic
+    }
+  }
 
   void _onMapCreated(GoogleMapController controller) {
     setState(() {
@@ -42,6 +53,31 @@ class _DriverPageState extends State<DriverPage> {
               onTap: () {
                 Navigator.pop(context);
               },
+            ),
+            DropdownButton<String>(
+              value: selectedRoute,
+              items: <String>["Men's Hostel", 'Academic Block']
+                  .map<DropdownMenuItem<String>>((String value) {
+                return DropdownMenuItem<String>(
+                  value: value,
+                  child: Text(value),
+                );
+              }).toList(),
+              onChanged: (String? newValue) {
+                setState(() {
+                  selectedRoute = newValue!;
+                  print(selectedRoute);
+                });
+              },
+            ),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  isShiftActive = !isShiftActive; // Toggle the shift state
+                });
+                print(isShiftActive ? "Shift Started" : "Shift Ended");
+              },
+              child: Text(isShiftActive ? 'End Shift' : 'Start Shift'),
             ),
             Spacer(),
             ListTile(
