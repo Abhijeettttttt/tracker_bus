@@ -64,7 +64,7 @@ class _StudentPageState extends State<StudentPage> {
       body: Column(
         children: [
           SizedBox(
-            height: 300,
+            height: 600,
             child: GoogleMap(
               initialCameraPosition: _cameraPosition,
               markers: _markers,

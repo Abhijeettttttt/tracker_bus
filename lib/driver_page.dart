@@ -95,7 +95,7 @@ class _DriverPageState extends State<DriverPage> {
       body: Column(
         children: [
           SizedBox(
-            height: 300,
+            height: 650,
             child: GoogleMap(
               initialCameraPosition: CameraPosition(
                 target: LatLng(12.972060, 79.156578),
