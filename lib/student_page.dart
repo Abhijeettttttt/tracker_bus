@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart';
+import 'home_screen.dart';
 
 class StudentPage extends StatefulWidget {
   @override
@@ -81,6 +82,34 @@ class _StudentPageState extends State<StudentPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Student Page'),
+      ),
+      drawer: Drawer(
+        child: Column(
+          children: [
+            ListTile(
+              title: Text('Home'),
+              onTap: () {
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              title: Text('Other Option 1'),
+              onTap: () {
+                Navigator.pop(context);
+              },
+            ),
+            Spacer(),
+            ListTile(
+              title: Text('Logout'),
+              onTap: () {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => HomeScreen()),
+                );
+              },
+            ),
+          ],
+        ),
       ),
       body: GoogleMap(
         initialCameraPosition: CameraPosition(
