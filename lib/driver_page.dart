@@ -2,22 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart';
 import 'home_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 class DriverPage extends StatefulWidget {
+  final String username;
+  const DriverPage({super.key, required this.username});
+
   @override
   _DriverPageState createState() => _DriverPageState();
 }
 
 class _DriverPageState extends State<DriverPage> {
-  //For firebase database, dont change
-  String selectedRoute="Men's Hostel";
-  bool isShiftActive=false;
+  // For firebase database, don't change
+  String selectedRoute = "Men's Hostel";
+  bool isShiftActive = false;
 
-
-
-  Location _location = Location();
+  final Location _location = Location();
   GoogleMapController? _mapController;
-  Set<Marker> _markers = {};
+  final Set<Marker> _markers = {};
   LatLng _currentPosition = LatLng(12.972060, 79.156578); // Default location
   String _locationData = 'Location not available';
 
@@ -62,17 +65,53 @@ class _DriverPageState extends State<DriverPage> {
       _locationData =
           'Latitude: ${locationData.latitude}, Longitude: ${locationData.longitude}';
     });
-
+    _updateDriverLocation();
     // Listen to location changes
-    _location.onLocationChanged.listen((newLocation) {
-      // Update the UI with new location
-      setState(() {
-        _currentPosition =
-            LatLng(newLocation.latitude ?? 0.0, newLocation.longitude ?? 0.0);
-        _locationData =
-            'Latitude: ${newLocation.latitude}, Longitude: ${newLocation.longitude}';
+    if (isShiftActive) {
+      _location.onLocationChanged.listen((newLocation) {
+        setState(() {
+          _currentPosition =
+              LatLng(newLocation.latitude ?? 0.0, newLocation.longitude ?? 0.0);
+          _locationData =
+              'Latitude: ${newLocation.latitude}, Longitude: ${newLocation.longitude}';
+        });
+        _updateDriverLocation();
       });
+    }
+  }
+
+  // Update the driver location in Firestore
+  void _updateDriverLocation() async {
+    try {
+      // Check if the document exists first
+      DocumentSnapshot snapshot = await FirebaseFirestore.instance
+          .collection('drivers')
+          .doc(widget.username)
+          .get();
+
+      if (snapshot.exists) {
+        await FirebaseFirestore.instance
+    .collection('drivers')
+    .doc(widget.username)
+    .set({
+      'username': widget.username,
+      'location': GeoPoint(_currentPosition.latitude, _currentPosition.longitude),
+      'isShiftActive': isShiftActive,
+      'selectedRoute': selectedRoute,
+    }, SetOptions(merge: true))
+    .then((_) {
+      print("Document updated successfully!");
+    }).catchError((e) {
+      print("Error updating document: $e");
     });
+ // Merge to avoid overwriting
+        print("Driver location updated successfully");
+      } else {
+        print("Document does not exist. Check username or collection path.");
+      }
+    } catch (e) {
+      print("Error updating driver location: $e");
+    }
   }
 
   void _onMapCreated(GoogleMapController controller) {
@@ -82,46 +121,30 @@ class _DriverPageState extends State<DriverPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Driver Page'),
-      ),
+      appBar: AppBar(title: Text('Driver Page')),
       drawer: Drawer(
         child: Column(
           children: [
-            ListTile(
-              title: Text('Home'),
-              onTap: () {
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              title: Text('Other Option 1'),
-              onTap: () {
-                Navigator.pop(context);
-              },
-            ),
+            ListTile(title: Text('Home'), onTap: () => Navigator.pop(context)),
             DropdownButton<String>(
               value: selectedRoute,
               items: <String>["Men's Hostel", 'Academic Block']
                   .map<DropdownMenuItem<String>>((String value) {
-                return DropdownMenuItem<String>(
-                  value: value,
-                  child: Text(value),
-                );
+                return DropdownMenuItem<String>(value: value, child: Text(value));
               }).toList(),
               onChanged: (String? newValue) {
                 setState(() {
                   selectedRoute = newValue!;
-                  print(selectedRoute);
+                  _updateDriverLocation(); // Update the route in Firestore
                 });
               },
             ),
             ElevatedButton(
               onPressed: () {
                 setState(() {
-                  isShiftActive = !isShiftActive; // Toggle the shift state
+                  isShiftActive = !isShiftActive;
                 });
-                print(isShiftActive ? "Shift Started" : "Shift Ended");
+                _updateDriverLocation(); // Update shift status in Firestore
               },
               child: Text(isShiftActive ? 'End Shift' : 'Start Shift'),
             ),
@@ -138,32 +161,14 @@ class _DriverPageState extends State<DriverPage> {
           ],
         ),
       ),
-      body: Column(
-        children: [
-          // Google Map at the top
-          SizedBox(
-            height: 600, // You can adjust this height to your preference
-            child: GoogleMap(
-              initialCameraPosition: CameraPosition(
-                target: _currentPosition,
-                zoom: 18.0,
-              ),
-              onMapCreated: _onMapCreated,
-              markers: _markers,
-              myLocationEnabled: true,
-              myLocationButtonEnabled: true,
-            ),
-          ),
-          SizedBox(height: 20), // Space between the map and the location text
-          // Location information below the map
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Text(
-              _locationData,
-              style: TextStyle(fontSize: 18),
-            ),
-          ),
-        ],
+      body: GoogleMap(
+        initialCameraPosition: CameraPosition(target: _currentPosition, zoom: 18.0),
+        onMapCreated: (GoogleMapController controller) {
+          _mapController = controller;
+        },
+        markers: _markers,
+        myLocationEnabled: true,
+        myLocationButtonEnabled: true,
       ),
     );
   }

@@ -4,6 +4,8 @@ import 'driver_page.dart';
 import 'driver_login.dart';
 
 class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
   @override
   _HomeScreenState createState() => _HomeScreenState();
 }

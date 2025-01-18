@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'driver_page.dart';
 import 'home_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class DriverLogin extends StatefulWidget {
+  const DriverLogin({super.key});
+
   @override
   _DriverLogin createState() => _DriverLogin();
 }
@@ -14,20 +17,32 @@ class _DriverLogin extends State<DriverLogin> {
   String? errorText;
 
   // Temporary login validation
-  void validateLogin(BuildContext context) {
+  void validateLogin(BuildContext context) async {
     String username = _usernameController.text.trim();
     String password = _passwordController.text.trim();
 
-    if (username == 'driver' && password == 'password123') {
-      // Navigate to DriverPage if login is successful
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => DriverPage()),
-      );
-    } else {
-      // Show error if validation fails
+    try {
+      // Querying drivers collection for authentication
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('drivers')
+          .where('username', isEqualTo: username)
+          .where('password', isEqualTo: password)
+          .get();
+
+      if (querySnapshot.docs.isNotEmpty) {
+        // If login is successful, navigate to DriverPage
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => DriverPage(username: username)),
+        );
+      } else {
+        setState(() {
+          errorText = 'Invalid username or password';
+        });
+      }
+    } catch (e) {
       setState(() {
-        errorText = 'Invalid username or password';
+        errorText = 'An error occurred. Please try again later.';
       });
     }
   }
@@ -67,7 +82,6 @@ class _DriverLogin extends State<DriverLogin> {
               children: [
                 ElevatedButton(
                   onPressed: () {
-                    // Go back to the HomeScreen
                     Navigator.pushReplacement(
                       context,
                       MaterialPageRoute(builder: (context) => HomeScreen()),
@@ -77,7 +91,6 @@ class _DriverLogin extends State<DriverLogin> {
                 ),
                 ElevatedButton(
                   onPressed: () {
-                    // Validate login
                     validateLogin(context);
                   },
                   child: Text('Login'),
