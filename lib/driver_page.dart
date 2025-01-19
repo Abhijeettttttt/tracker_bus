@@ -1,3 +1,4 @@
+import 'dart:async'; // Import for Timer
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart';
@@ -14,20 +15,28 @@ class DriverPage extends StatefulWidget {
 }
 
 class _DriverPageState extends State<DriverPage> {
-  // For firebase database, don't change
+  // Route and shift variables
   String selectedRoute = "Men's Hostel";
   bool isShiftActive = false;
 
+  // Location and map variables
   final Location _location = Location();
   GoogleMapController? _mapController;
   final Set<Marker> _markers = {};
   LatLng _currentPosition = LatLng(12.972060, 79.156578); // Default location
   String _locationData = 'Location not available';
+  Timer? _locationUpdateTimer; // Timer to update location periodically
 
   @override
   void initState() {
     super.initState();
     _getLiveLocation();
+  }
+
+  @override
+  void dispose() {
+    _locationUpdateTimer?.cancel(); // Cancel the timer when the widget is disposed
+    super.dispose();
   }
 
   // Function to get and print the live location
@@ -55,25 +64,22 @@ class _DriverPageState extends State<DriverPage> {
       }
     }
 
-    // Get the current location
-    LocationData locationData = await _location.getLocation();
+    // Start periodic updates if the shift is active
+    _startPeriodicLocationUpdates();
+  }
 
-    // Update the UI with location data
-    setState(() {
-      _currentPosition =
-          LatLng(locationData.latitude ?? 0.0, locationData.longitude ?? 0.0);
-      _locationData =
-          'Latitude: ${locationData.latitude}, Longitude: ${locationData.longitude}';
-    });
-    _updateDriverLocation();
-    // Listen to location changes
+  // Start a periodic task to update location in Firestore
+  void _startPeriodicLocationUpdates() {
+    _locationUpdateTimer?.cancel(); // Cancel any existing timer
     if (isShiftActive) {
-      _location.onLocationChanged.listen((newLocation) {
+      _locationUpdateTimer = Timer.periodic(Duration(seconds: 2), (timer) async {
+        LocationData locationData = await _location.getLocation();
         setState(() {
           _currentPosition =
-              LatLng(newLocation.latitude ?? 0.0, newLocation.longitude ?? 0.0);
+              LatLng(locationData.latitude ?? 0.0, locationData.longitude ?? 0.0);
           _locationData =
-              'Latitude: ${newLocation.latitude}, Longitude: ${newLocation.longitude}';
+              'Latitude: ${locationData.latitude}, Longitude: ${locationData.longitude}';
+              print(_locationData);
         });
         _updateDriverLocation();
       });
@@ -83,32 +89,16 @@ class _DriverPageState extends State<DriverPage> {
   // Update the driver location in Firestore
   void _updateDriverLocation() async {
     try {
-      // Check if the document exists first
-      DocumentSnapshot snapshot = await FirebaseFirestore.instance
+      await FirebaseFirestore.instance
           .collection('drivers')
           .doc(widget.username)
-          .get();
-
-      if (snapshot.exists) {
-        await FirebaseFirestore.instance
-    .collection('drivers')
-    .doc(widget.username)
-    .set({
-      'username': widget.username,
-      'location': GeoPoint(_currentPosition.latitude, _currentPosition.longitude),
-      'isShiftActive': isShiftActive,
-      'selectedRoute': selectedRoute,
-    }, SetOptions(merge: true))
-    .then((_) {
-      print("Document updated successfully!");
-    }).catchError((e) {
-      print("Error updating document: $e");
-    });
- // Merge to avoid overwriting
-        print("Driver location updated successfully");
-      } else {
-        print("Document does not exist. Check username or collection path.");
-      }
+          .set({
+        'username': widget.username,
+        'location': GeoPoint(_currentPosition.latitude, _currentPosition.longitude),
+        'isShiftActive': isShiftActive,
+        'selectedRoute': selectedRoute,
+      }, SetOptions(merge: true)); // Merge to avoid overwriting
+      print("Driver location updated successfully");
     } catch (e) {
       print("Error updating driver location: $e");
     }
@@ -143,6 +133,11 @@ class _DriverPageState extends State<DriverPage> {
               onPressed: () {
                 setState(() {
                   isShiftActive = !isShiftActive;
+                  if (isShiftActive) {
+                    _startPeriodicLocationUpdates();
+                  } else {
+                    _locationUpdateTimer?.cancel(); // Stop updates when the shift ends
+                  }
                 });
                 _updateDriverLocation(); // Update shift status in Firestore
               },

@@ -13,14 +13,14 @@ class _StudentPageState extends State<StudentPage> {
   final Location _location = Location();
   GoogleMapController? _mapController;
   Set<Marker> _markers = {};
-  LatLng _currentPosition = LatLng(12.972060, 79.156578); // Default location
+  LatLng _initialPosition = LatLng(12.9716, 79.1591); // VIT Vellore location
+  bool _isCameraMovedManually = false; // Prevent auto-panning on manual map movement
 
   @override
   void initState() {
     super.initState();
     _getUserLocation();
-    _listenForDriverChanges();
-    _addHardcodedMarker(); // Add hardcoded marker
+    _listenToDriverChanges(); // Real-time Firestore updates
   }
 
   // Get the user's current location
@@ -41,49 +41,24 @@ class _StudentPageState extends State<StudentPage> {
     }
 
     LocationData locationData = await _location.getLocation();
-
     setState(() {
-      _currentPosition =
-          LatLng(locationData.latitude ?? 0.0, locationData.longitude ?? 0.0);
-      _markers.add(
-        Marker(
-          markerId: MarkerId('userLocation'),
-          position: _currentPosition,
-          infoWindow: InfoWindow(title: 'Your Location'),
-        ),
-      );
+      _initialPosition = LatLng(locationData.latitude ?? 0.0, locationData.longitude ?? 0.0);
     });
 
     _location.onLocationChanged.listen((newLocation) {
-      if (!mounted) return;
+      if (!mounted || _isCameraMovedManually) return; // Skip if user moved the camera manually
       setState(() {
-        _currentPosition =
-            LatLng(newLocation.latitude ?? 0.0, newLocation.longitude ?? 0.0);
-        _markers.removeWhere((marker) => marker.markerId.value == 'userLocation');
-        _markers.add(
-          Marker(
-            markerId: MarkerId('userLocation'),
-            position: _currentPosition,
-            infoWindow: InfoWindow(title: 'Your Location'),
-          ),
-        );
-        _mapController?.animateCamera(
-          CameraUpdate.newLatLngZoom(_currentPosition, 18.0),
-        );
+        _initialPosition = LatLng(newLocation.latitude ?? 0.0, newLocation.longitude ?? 0.0);
       });
     });
   }
 
-  // Listen for changes in drivers' shift statuses and locations
-  void _listenForDriverChanges() {
-    FirebaseFirestore.instance
-        .collection('drivers')
-        .snapshots()
-        .listen((snapshot) {
+  // Listen for real-time updates from Firestore
+  void _listenToDriverChanges() {
+    FirebaseFirestore.instance.collection('drivers').snapshots().listen((snapshot) {
       Set<Marker> updatedMarkers = {};
-
       for (var doc in snapshot.docs) {
-        var data = doc.data();
+        var data = doc.data() as Map<String, dynamic>;
         bool isShiftActive = data['isShiftActive'] ?? false;
 
         if (isShiftActive) {
@@ -92,43 +67,29 @@ class _StudentPageState extends State<StudentPage> {
             data['location'].longitude,
           );
           String route = data['selectedRoute'];
-          Color markerColor = route == "Men's Hostel" ? Colors.blue : Colors.orange;
+          double rotation = data['rotation'] ?? 0.0; // Direction of movement (degrees)
+
+          // Choose marker color based on route
+          final hue = route == "Men's Hostel" ? BitmapDescriptor.hueBlue : BitmapDescriptor.hueOrange;
 
           updatedMarkers.add(Marker(
             markerId: MarkerId(doc.id),
             position: driverLocation,
-            infoWindow: InfoWindow(title: 'Driver: ${doc.id}, Route: $route'),
-            icon: BitmapDescriptor.defaultMarkerWithHue(
-              markerColor == Colors.blue
-                  ? BitmapDescriptor.hueBlue
-                  : BitmapDescriptor.hueOrange,
+            icon: BitmapDescriptor.defaultMarkerWithHue(hue), // Colored car marker
+            infoWindow: InfoWindow(
+              title: 'Driver: ${doc.id}',
+              snippet: 'Route: $route',
             ),
+            rotation: rotation, // Rotate marker to match the direction
           ));
         }
       }
 
       if (mounted) {
         setState(() {
-          _markers = {
-            ..._markers.where((marker) => marker.markerId.value == 'userLocation'),
-            ...updatedMarkers
-          };
+          _markers = updatedMarkers;
         });
       }
-    });
-  }
-
-  // Add a hardcoded marker
-  void _addHardcodedMarker() {
-    setState(() {
-      _markers.add(
-        Marker(
-          markerId: MarkerId('hardcodedMarker'),
-          position: LatLng(12.971598, 79.159100), // Example coordinates
-          infoWindow: InfoWindow(title: 'Hardcoded Marker'),
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-        ),
-      );
     });
   }
 
@@ -152,12 +113,6 @@ class _StudentPageState extends State<StudentPage> {
                 Navigator.pop(context);
               },
             ),
-            ListTile(
-              title: Text('Other Option 1'),
-              onTap: () {
-                Navigator.pop(context);
-              },
-            ),
             Spacer(),
             ListTile(
               title: Text('Logout'),
@@ -173,13 +128,19 @@ class _StudentPageState extends State<StudentPage> {
       ),
       body: GoogleMap(
         initialCameraPosition: CameraPosition(
-          target: _currentPosition,
+          target: _initialPosition, // Starts at VIT Vellore
           zoom: 18.0,
         ),
         onMapCreated: _onMapCreated,
         markers: _markers,
-        myLocationEnabled: true,
+        myLocationEnabled: true, // Show blue dot for user's location
         myLocationButtonEnabled: true,
+        onCameraMove: (_) {
+          // Detect manual camera movement
+          setState(() {
+            _isCameraMovedManually = true;
+          });
+        },
       ),
     );
   }
